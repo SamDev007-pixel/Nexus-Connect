@@ -22,9 +22,8 @@ const socketHandler = (io) => {
         }
 
         socket.join(formattedCode);
-        socket.join(`broadcast_${formattedCode}`);
 
-        // 🔥 Track Online Users (Only for real users)
+        // Track user online status
         if (userId) {
           await User.findByIdAndUpdate(userId, {
             isOnline: true,
@@ -32,53 +31,53 @@ const socketHandler = (io) => {
           });
         }
 
-        // ===============================
-        // LOAD DATA BASED ON ROLE
-        // ===============================
-
+        // USER
         if (role === "user") {
-  const allMessages = await Message.find({
-    room: room._id,
-  })
-    .populate("sender", "username")
-    .sort({ createdAt: 1 });
+          const messages = await Message.find({ room: room._id })
+            .populate("sender", "username")
+            .sort({ createdAt: 1 });
 
-  socket.emit("load_messages", allMessages);
-}
+          socket.emit("load_messages", messages);
+        }
 
+        // ADMIN
         if (role === "admin") {
-          const pendingMessages = await Message.find({
+          const pending = await Message.find({
             room: room._id,
             status: "pending",
           })
             .populate("sender", "username")
             .sort({ createdAt: 1 });
 
-          socket.emit("load_pending_messages", pendingMessages);
+          socket.emit("load_pending_messages", pending);
         }
 
+        // BROADCAST
         if (role === "broadcast") {
-          const approvedMessages = await Message.find({
+          socket.join(`broadcast_${formattedCode}`);
+
+          const approved = await Message.find({
             room: room._id,
             status: "approved",
           })
             .populate("sender", "username")
             .sort({ createdAt: 1 });
 
-          socket.emit("load_broadcast_messages", approvedMessages);
+          socket.emit("load_broadcast_messages", approved);
         }
 
-        // 🔥 LIVE USERS UPDATE (for SuperAdmin)
-        const activeUsers = await User.find({
-          room: room._id,
-          status: "approved",
-          isOnline: true,
-        }).select("username role isOnline");
+        // SUPERADMIN
+        if (role === "superadmin") {
+          const liveUsers = await User.find({
+            room: room._id,
+            status: "approved",
+            isOnline: true,
+          }).select("username role isOnline");
 
-        socket.emit("superadmin_live_users", activeUsers);
-
-      } catch (error) {
-        console.error("Join Room Error:", error.message);
+          socket.emit("superadmin_live_users", liveUsers);
+        }
+      } catch (err) {
+        console.error("Join Room Error:", err.message);
       }
     });
 
@@ -87,7 +86,7 @@ const socketHandler = (io) => {
     // =========================================
     socket.on("send_message", async ({ userId, roomCode, content }) => {
       try {
-        if (!content || !content.trim()) return;
+        if (!content?.trim()) return;
 
         const formattedCode = roomCode.trim().toUpperCase();
         const room = await Room.findOne({ roomCode: formattedCode });
@@ -100,161 +99,90 @@ const socketHandler = (io) => {
           status: "pending",
         });
 
-        const populatedMessage = await Message.findById(message._id)
+        const populated = await Message.findById(message._id)
           .populate("sender", "username")
           .populate("room", "roomCode");
 
-        io.to(formattedCode).emit("receive_message", populatedMessage);
-        socket.emit("new_pending_message", populatedMessage);
+        // Send to all users
+        io.to(formattedCode).emit("receive_message", populated);
 
-      } catch (error) {
-        console.error("Send Message Error:", error.message);
+        // Send to admins only
+        io.to(formattedCode).emit("new_pending_message", populated);
+
+      } catch (err) {
+        console.error("Send Message Error:", err.message);
       }
     });
 
     // =========================================
-    // APPROVE MESSAGE
+    // APPROVE MESSAGE (Broadcast Only)
     // =========================================
     socket.on("approve_message", async ({ messageId }) => {
-  try {
-    const message = await Message.findByIdAndUpdate(
-      messageId,
-      { status: "approved" },
-      { new: true }
-    )
-      .populate("sender", "username")
-      .populate("room", "roomCode");
-
-    if (!message) return;
-
-    const roomCode = message.room.roomCode;
-
-    // Send to broadcast
-    io.to(`broadcast_${roomCode}`).emit("broadcast_message", message);
-
-
-  } catch (error) {
-    console.error("Approve Message Error:", error.message);
-  }
-});
-    // =========================================
-    // DELETE ROOM
-    // =========================================
-    socket.on("delete_room", async ({ roomCode }) => {
       try {
-        const formattedCode = roomCode.trim().toUpperCase();
-        const room = await Room.findOne({ roomCode: formattedCode });
-        if (!room) return;
+        const message = await Message.findByIdAndUpdate(
+          messageId,
+          { status: "approved" },
+          { new: true }
+        )
+          .populate("sender", "username")
+          .populate("room", "roomCode");
 
-        // Get all users in the room before deleting
-        const roomUsers = await User.find({ room: room._id });
+        if (!message) return;
 
-        // Delete the room
-        await Room.deleteOne({ _id: room._id });
+        const roomCode = message.room.roomCode;
 
-        // Notify all users in the room that admin deleted it
-        io.to(formattedCode).emit("room_deleted_by_admin", {
-          message: "The room has been deleted by the Admin",
-        });
-        
-        io.to(`broadcast_${formattedCode}`).emit("room_deleted_by_admin", {
-          message: "The room has been deleted by the Admin",
-        });
-
-        // Update all users in the room to offline
-        for (const user of roomUsers) {
-          user.isOnline = false;
-          user.socketId = null;
-          await user.save();
-        }
-
-      } catch (error) {
-        console.error("Delete Room Error:", error.message);
+        io.to(`broadcast_${roomCode}`).emit(
+          "broadcast_message",
+          message
+        );
+      } catch (err) {
+        console.error("Approve Message Error:", err.message);
       }
     });
 
     // =========================================
-// APPROVE USER (REAL-TIME)
-// =========================================
-socket.on("approve_user", async ({ userId, roomCode }) => {
-  try {
-    if (!userId || !roomCode) return;
+    // APPROVE USER (CORRECT VERSION)
+    // =========================================
+    socket.on("approve_user", async ({ userId }) => {
+      try {
+        const user = await User.findByIdAndUpdate(
+          userId,
+          { status: "approved" },
+          { new: true }
+        );
 
-    const formattedCode = roomCode.trim().toUpperCase();
+        if (!user) return;
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { status: "approved" },
-      { new: true }
-    );
+        // Emit ONLY to that specific user
+        if (user.socketId) {
+          io.to(user.socketId).emit("user_approved", user._id);
+        }
 
-    if (!user) return;
+        console.log("✅ User approved:", user.username);
+      } catch (err) {
+        console.error("Approve User Error:", err.message);
+      }
+    });
 
-    // 🔥 Notify that specific user
-    io.to(formattedCode).emit("user_approved", user._id);
-
-    // 🔥 Update superadmin live users
-    const room = await Room.findOne({ roomCode: formattedCode });
-
-    if (room) {
-      const activeUsers = await User.find({
-        room: room._id,
-        status: "approved",
-        isOnline: true,
-      }).select("username role isOnline");
-
-      io.to(formattedCode).emit("superadmin_live_users", activeUsers);
-    }
-
-    console.log("✅ User approved:", user.username);
-
-  } catch (error) {
-    console.error("Approve User Error:", error.message);
-  }
-});
     // =========================================
     // KICK USER
     // =========================================
-    socket.on("kick_user", async ({ userId, roomCode }) => {
+    socket.on("kick_user", async ({ userId }) => {
       try {
         const user = await User.findById(userId);
+        if (!user) return;
 
-        if (!user) {
-          console.log("User not found for kick");
-          return;
-        }
-
-        // Store the user's socket info before updating
-        const userSocketId = user.socketId;
-        const userRoomCode = user.room ? (await Room.findById(user.room))?.roomCode : null;
-
-        // Update user to offline and remove from room
-        user.isOnline = false;
-        user.socketId = null;
-        await user.save();
-
-        // If user was in a room, notify superadmin of live users update
-        if (userRoomCode) {
-          const activeUsers = await User.find({
-            room: user.room,
-            status: "approved",
-            isOnline: true,
-          }).select("username role isOnline");
-
-          io.to(userRoomCode).emit("superadmin_live_users", activeUsers);
-        }
-
-        // Emit to the kicked user's socket if online
-        if (userSocketId) {
-          io.to(userSocketId).emit("kicked_from_room", {
-            message: "You have been removed from the room by the Super Admin",
+        if (user.socketId) {
+          io.to(user.socketId).emit("kicked_from_room", {
+            message: "You were removed by Super Admin",
           });
         }
 
-        console.log(`👢 User kicked: ${user.username}`);
-
-      } catch (error) {
-        console.error("Kick User Error:", error.message);
+        user.isOnline = false;
+        user.socketId = null;
+        await user.save();
+      } catch (err) {
+        console.error("Kick User Error:", err.message);
       }
     });
 
@@ -264,30 +192,15 @@ socket.on("approve_user", async ({ userId, roomCode }) => {
     socket.on("disconnect", async () => {
       try {
         const user = await User.findOne({ socketId: socket.id });
-
         if (user) {
           user.isOnline = false;
           user.socketId = null;
           await user.save();
-
-          const room = await Room.findById(user.room);
-
-          if (room) {
-            const activeUsers = await User.find({
-              room: room._id,
-              status: "approved",
-              isOnline: true,
-            }).select("username role isOnline");
-
-            io.to(room.roomCode)
-              .emit("superadmin_live_users", activeUsers);
-          }
         }
 
         console.log("🔴 Disconnected:", socket.id);
-
-      } catch (error) {
-        console.error("Disconnect Error:", error.message);
+      } catch (err) {
+        console.error("Disconnect Error:", err.message);
       }
     });
   });
