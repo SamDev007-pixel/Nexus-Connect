@@ -174,6 +174,45 @@ const socketHandler = (io) => {
     });
 
     // =========================================
+// APPROVE USER (REAL-TIME)
+// =========================================
+socket.on("approve_user", async ({ userId, roomCode }) => {
+  try {
+    if (!userId || !roomCode) return;
+
+    const formattedCode = roomCode.trim().toUpperCase();
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { status: "approved" },
+      { new: true }
+    );
+
+    if (!user) return;
+
+    // 🔥 Notify that specific user
+    io.to(formattedCode).emit("user_approved", user._id);
+
+    // 🔥 Update superadmin live users
+    const room = await Room.findOne({ roomCode: formattedCode });
+
+    if (room) {
+      const activeUsers = await User.find({
+        room: room._id,
+        status: "approved",
+        isOnline: true,
+      }).select("username role isOnline");
+
+      io.to(formattedCode).emit("superadmin_live_users", activeUsers);
+    }
+
+    console.log("✅ User approved:", user.username);
+
+  } catch (error) {
+    console.error("Approve User Error:", error.message);
+  }
+});
+    // =========================================
     // KICK USER
     // =========================================
     socket.on("kick_user", async ({ userId, roomCode }) => {

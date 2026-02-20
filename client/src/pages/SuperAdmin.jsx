@@ -83,14 +83,19 @@ const SuperAdmin = () => {
     }
   };
 
-  const approveUser = async (userId) => {
-    try {
-      await axios.patch(`${SERVER_URL}/api/rooms/approve-user/${userId}`);
-      setPendingUsers((prev) => prev.filter((user) => user._id !== userId));
-    } catch (err) {
-      console.error("Approval failed");
-    }
-  };
+const approveUser = (userId) => {
+  if (!socket || !selectedRoomCode) return;
+
+  socket.emit("approve_user", {
+    userId,
+    roomCode: selectedRoomCode,
+  });
+
+  // Optional: remove from pending instantly for UI
+  setPendingUsers((prev) =>
+    prev.filter((user) => user._id !== userId)
+  );
+};
 
   const fetchAllUsers = async () => {
     if (!selectedRoomCode) return;
