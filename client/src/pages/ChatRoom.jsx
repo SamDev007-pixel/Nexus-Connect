@@ -127,13 +127,13 @@ const ChatInterface = ({ roomCode, userId }) => {
       setMessages(msgs);
     });
 
-    socket.on("receive_message", (msg) => {
-      setMessages((prev) => {
-        const exists = prev.find((m) => m._id === msg._id);
-        if (exists) return prev;
-        return [...prev, msg];
-      });
-    });
+    socket.on("approved_message", (msg) => {
+  setMessages((prev) => {
+    const exists = prev.find((m) => m._id === msg._id);
+    if (exists) return prev;
+    return [...prev, msg];
+  });
+});
 
     // Handle kicked from room
     socket.on("kicked_from_room", (data) => {

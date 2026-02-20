@@ -116,30 +116,29 @@ const socketHandler = (io) => {
     // APPROVE MESSAGE
     // =========================================
     socket.on("approve_message", async ({ messageId }) => {
-      try {
-        const message = await Message.findByIdAndUpdate(
-          messageId,
-          { status: "approved" },
-          { new: true }
-        )
-          .populate("sender", "username")
-          .populate("room", "roomCode");
+  try {
+    const message = await Message.findByIdAndUpdate(
+      messageId,
+      { status: "approved" },
+      { new: true }
+    )
+      .populate("sender", "username")
+      .populate("room", "roomCode");
 
-        if (!message) return;
+    if (!message) return;
 
-        const roomCode = message.room.roomCode;
+    const roomCode = message.room.roomCode;
 
-        io.to(`broadcast_${roomCode}`)
-          .emit("broadcast_message", message);
+    // Send to broadcast
+    io.to(`broadcast_${roomCode}`).emit("broadcast_message", message);
 
-        io.to(roomCode)
-          .emit("message_approved", message);
+    // Send to users
+    io.to(roomCode).emit("approved_message", message);
 
-      } catch (error) {
-        console.error("Approve Message Error:", error.message);
-      }
-    });
-
+  } catch (error) {
+    console.error("Approve Message Error:", error.message);
+  }
+});
     // =========================================
     // DELETE ROOM
     // =========================================
