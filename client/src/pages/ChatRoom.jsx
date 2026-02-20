@@ -26,7 +26,7 @@ const ChatRoom = () => {
     const socket = io(SERVER_URL);
 
     socket.on("user_approved", (approvedUserId) => {
-      if (approvedUserId === userId) {
+      if (String(approvedUserId) === String(userId)) {
         setStatus("approved");
 
         const saved = JSON.parse(sessionStorage.getItem("chatSession"));
