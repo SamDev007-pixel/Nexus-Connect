@@ -1,0 +1,10 @@
+:root {
+  --bg-black: #0f0f14;
+  --bg-dark-purple: #1a0826;
+  --purple-main: #7b2cbf;
+  --purple-light: #9d4edd;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --text-light: #ffffff;
+  --text-muted: #cccccc;
+}

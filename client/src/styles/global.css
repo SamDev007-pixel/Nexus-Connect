@@ -1,0 +1,91 @@
+@import "./variables.css";
+
+/* ========================= */
+/* 🌍 Base Reset */
+/* ========================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  background: linear-gradient(
+    135deg,
+    var(--bg-black),
+    var(--bg-dark-purple)
+  );
+  color: var(--text-light);
+  min-height: 100vh;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  overflow-x: hidden;
+}
+
+/* ========================= */
+/* 🔘 Button Reset */
+/* ========================= */
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* ========================= */
+/* 🔥 Professional Scrollbar */
+/* ========================= */
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(123, 44, 191, 0.6),
+    rgba(157, 78, 221, 0.6)
+  );
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(123, 44, 191, 0.9),
+    rgba(157, 78, 221, 0.9)
+  );
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(157, 78, 221, 0.6) transparent;
+}
+
+/* ========================= */
+/* ✨ Text Selection */
+/* ========================= */
+
+::selection {
+  background: rgba(157, 78, 221, 0.4);
+  color: white;
+}
