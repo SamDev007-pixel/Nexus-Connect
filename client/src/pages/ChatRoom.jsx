@@ -124,8 +124,27 @@ const ChatInterface = ({ roomCode, userId }) => {
     socket.emit("join_room", { roomCode, role: "user", userId });
 
     socket.on("load_messages", (msgs) => {
-      setMessages(msgs);
+  setMessages((prev) => {
+    const merged = [...msgs];
+
+    prev.forEach((oldMsg) => {
+      if (!merged.find((m) => m._id === oldMsg._id)) {
+        merged.push(oldMsg);
+      }
     });
+
+    return merged.sort(
+      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+    );
+  });
+});
+    socket.on("receive_message", (msg) => {
+  setMessages((prev) => {
+    const exists = prev.find((m) => m._id === msg._id);
+    if (exists) return prev;
+    return [...prev, msg];
+  });
+});
 
     socket.on("approved_message", (msg) => {
   setMessages((prev) => {
