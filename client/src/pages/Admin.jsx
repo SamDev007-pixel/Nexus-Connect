@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import axios from "axios";
 
-// Get server URL from env or use production fallback
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "https://aws-cloud-connect-server.onrender.com";
 
 const Admin = () => {
@@ -10,32 +9,38 @@ const Admin = () => {
   const [connected, setConnected] = useState(false);
   const [pendingMessages, setPendingMessages] = useState([]);
   const [socket, setSocket] = useState(null);
+  const [error, setError] = useState("");
 
-  // =====================================
-  // 🔥 Initialize Socket Once
-  // =====================================
+  // Initialize Socket
   useEffect(() => {
-    const newSocket = io(SERVER_URL);
+    const newSocket = io(SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+    });
+
+    newSocket.on("connect", () => {
+      console.log("Admin connected");
+    });
+
     setSocket(newSocket);
 
     return () => newSocket.disconnect();
   }, []);
 
-  // =====================================
-  // 🔥 Restore Admin Session On Refresh
-  // =====================================
+  // Restore Admin Session
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("adminSession"));
-
-    if (saved && saved.role === "admin") {
-      setRoomCode(saved.roomCode);
-      setConnected(true);
+    try {
+      const saved = JSON.parse(localStorage.getItem("adminSession"));
+      if (saved && saved.role === "admin" && saved.roomCode) {
+        setRoomCode(saved.roomCode);
+        setConnected(true);
+      }
+    } catch (e) {
+      console.error("Session parse error:", e);
     }
   }, []);
 
-  // =====================================
-  // 🔥 Join Room After Restore / Connect
-  // =====================================
+  // Join Room After Restore
   useEffect(() => {
     if (!socket || !connected || !roomCode) return;
 
@@ -45,25 +50,13 @@ const Admin = () => {
     });
   }, [socket, connected, roomCode]);
 
-  // =====================================
-  // 🔥 Listen For Pending + Delete Events
-  // =====================================
+  // Socket Listeners
   useEffect(() => {
     if (!socket) return;
 
     const handleLoad = (msgs) => {
-  setPendingMessages((prev) => {
-    const merged = [...msgs];
-
-    prev.forEach((oldMsg) => {
-      if (!merged.find((m) => m._id === oldMsg._id)) {
-        merged.push(oldMsg);
-      }
-    });
-
-    return merged;
-  });
-};
+      setPendingMessages(msgs || []);
+    };
 
     const handleNew = (msg) => {
       setPendingMessages((prev) => {
@@ -90,26 +83,21 @@ const Admin = () => {
     };
   }, [socket]);
 
-  // =====================================
-  // 🔥 Connect Room Manually
-  // =====================================
   const connectRoom = () => {
     if (!roomCode.trim() || !socket) return;
 
     setConnected(true);
+    setError("");
 
     localStorage.setItem(
       "adminSession",
       JSON.stringify({
-        roomCode,
+        roomCode: roomCode.trim().toUpperCase(),
         role: "admin",
       })
     );
   };
 
-  // =====================================
-  // 🔥 Approve Message
-  // =====================================
   const approveMessage = (messageId) => {
     if (!socket) return;
 
@@ -120,30 +108,23 @@ const Admin = () => {
     );
   };
 
-  // =====================================
-  // 🔥 Delete Message (Permanent)
-  // =====================================
- const deleteMessage = async (messageId) => {
-  const confirmDelete = window.confirm(
-    "Are you sure you want to permanently delete this message?"
-  );
-
-  if (!confirmDelete) return;
-
-  try {
-    await axios.delete(
-      `${SERVER_URL}/api/messages/delete/${messageId}`
+  const deleteMessage = async (messageId) => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to permanently delete this message?"
     );
 
-  } catch (error) {
-    console.error("Delete failed:", error);
-    alert("Failed to delete message.");
-  }
-};
+    if (!confirmDelete) return;
 
-  // =====================================
-  // 🔥 Logout Admin
-  // =====================================
+    try {
+      await axios.delete(
+        `${SERVER_URL}/api/messages/delete/${messageId}`
+      );
+    } catch (error) {
+      console.error("Delete failed:", error);
+      setError("Failed to delete message");
+    }
+  };
+
   const logout = () => {
     const confirmLogout = window.confirm(
       "Are you sure you want to logout from this admin room?"
@@ -152,203 +133,310 @@ const Admin = () => {
     if (!confirmLogout) return;
 
     localStorage.removeItem("adminSession");
-    window.location.reload();
+    setConnected(false);
+    setRoomCode("");
+    setPendingMessages([]);
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "40px",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "1100px",
-          background: "rgba(255,255,255,0.05)",
-          backdropFilter: "blur(15px)",
-          borderRadius: "20px",
-          padding: "40px",
-          boxShadow: "0 0 40px rgba(0,0,0,0.4)",
-        }}
-      >
-        {/* HEADER */}
-        <div style={{ marginBottom: "30px" }}>
-          <h1 style={{ marginBottom: "8px" }}>
-            Admin Message Moderation
-          </h1>
-          <p style={{ opacity: 0.6 }}>
-            Review and moderate messages for live broadcast
-          </p>
+    <div style={pageStyle}>
+      <div style={containerStyle}>
+        <div style={headerStyle}>
+          <h1 style={titleStyle}>Admin Panel</h1>
+          <p style={subtitleStyle}>Moderate messages for live broadcast</p>
         </div>
 
-        {/* ROOM CONNECT */}
+        {error && <div style={errorStyle}>{error}</div>}
+
         {!connected && (
-          <div
-            style={{
-              display: "flex",
-              gap: "15px",
-              marginBottom: "30px",
-            }}
-          >
-            <input
-              placeholder="Enter Room Code"
-              value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value)}
-              style={{
-                flex: 1,
-                padding: "14px",
-                borderRadius: "10px",
-                border: "1px solid rgba(255,255,255,0.2)",
-                background: "rgba(255,255,255,0.05)",
-                color: "white",
-                fontSize: "15px",
-              }}
-            />
-            <button
-              onClick={connectRoom}
-              style={{
-                padding: "14px 25px",
-                borderRadius: "10px",
-                background: "linear-gradient(135deg,#7b2cbf,#9d4edd)",
-                color: "white",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
+          <div style={cardStyle}>
+            <div style={inputGroupStyle}>
+              <label style={labelStyle}>Room Code</label>
+              <input
+                type="text"
+                placeholder="Enter room code"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                style={inputStyle}
+                maxLength={6}
+              />
+            </div>
+            <button onClick={connectRoom} style={buttonStyle}>
               Connect
             </button>
           </div>
         )}
 
-        {/* CONNECTED STATE */}
         {connected && (
           <>
-            <div
-              style={{
-                marginBottom: "25px",
-                padding: "15px",
-                borderRadius: "12px",
-                background: "rgba(123,44,191,0.15)",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <span style={{ opacity: 0.6 }}>Room:</span>{" "}
-                <strong>{roomCode}</strong>
-              </div>
-
-              <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
+            <div style={statusCardStyle}>
+              <div style={statusRowStyle}>
                 <div>
-                  Pending: <strong>{pendingMessages.length}</strong>
+                  <span style={statusLabelStyle}>Room:</span>
+                  <span style={statusCodeStyle}>{roomCode}</span>
                 </div>
-
-                <button
-                  onClick={logout}
-                  style={{
-                    padding: "6px 14px",
-                    borderRadius: "8px",
-                    background: "rgba(255,255,255,0.15)",
-                    border: "none",
-                    color: "white",
-                    cursor: "pointer",
-                  }}
-                >
-                  Logout
-                </button>
+                <div style={statusRightStyle}>
+                  <span style={pendingCountStyle}>
+                    Pending: <strong>{pendingMessages.length}</strong>
+                  </span>
+                  <button onClick={logout} style={logoutButtonStyle}>
+                    Logout
+                  </button>
+                </div>
               </div>
             </div>
 
-            <h3 style={{ marginBottom: "20px" }}>
-              Pending Messages
-            </h3>
+            <div style={messagesCardStyle}>
+              <h3 style={sectionTitleStyle}>Pending Messages</h3>
 
-            {pendingMessages.length === 0 && (
-              <div
-                style={{
-                  padding: "40px",
-                  textAlign: "center",
-                  opacity: 0.5,
-                }}
-              >
-                No pending messages yet...
-              </div>
-            )}
-
-            {pendingMessages.map((msg) => (
-              <div
-                key={msg._id}
-                style={{
-                  padding: "20px",
-                  marginBottom: "18px",
-                  borderRadius: "14px",
-                  background: "rgba(255,255,255,0.07)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      opacity: 0.5,
-                      marginBottom: "6px",
-                    }}
-                  >
-                    {msg.sender?.username}
-                  </div>
-
-                  <div style={{ fontSize: "17px" }}>
-                    {msg.content}
-                  </div>
+              {pendingMessages.length === 0 ? (
+                <div style={emptyStyle}>
+                  No pending messages
                 </div>
-
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button
-                    onClick={() => approveMessage(msg._id)}
-                    style={{
-                      padding: "10px 18px",
-                      borderRadius: "8px",
-                      background: "#9d4edd",
-                      border: "none",
-                      color: "white",
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Approve
-                  </button>
-
-                  <button
-                    onClick={() => deleteMessage(msg._id)}
-                    style={{
-                      padding: "10px 18px",
-                      borderRadius: "8px",
-                      background: "#c1121f",
-                      border: "none",
-                      color: "white",
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
+              ) : (
+                pendingMessages.map((msg) => (
+                  <div key={msg._id} style={messageRowStyle}>
+                    <div style={messageContentStyle}>
+                      <div style={senderStyle}>
+                        {msg.sender?.username || "Unknown"}
+                      </div>
+                      <div style={msgContentStyle}>
+                        {msg.content}
+                      </div>
+                    </div>
+                    <div style={actionsStyle}>
+                      <button
+                        onClick={() => approveMessage(msg._id)}
+                        style={approveButtonStyle}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => deleteMessage(msg._id)}
+                        style={deleteButtonStyle}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </>
         )}
       </div>
     </div>
   );
+};
+
+// Styles
+const pageStyle = {
+  minHeight: "100vh",
+  backgroundColor: "#0a0a0a",
+  padding: "40px 20px",
+  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+};
+
+const containerStyle = {
+  maxWidth: "800px",
+  margin: "0 auto",
+};
+
+const headerStyle = {
+  textAlign: "center",
+  marginBottom: "32px",
+};
+
+const titleStyle = {
+  fontSize: "28px",
+  fontWeight: "600",
+  color: "#d8b4fe",
+  marginBottom: "8px",
+};
+
+const subtitleStyle = {
+  fontSize: "14px",
+  color: "#737373",
+};
+
+const errorStyle = {
+  padding: "12px 16px",
+  borderRadius: "8px",
+  backgroundColor: "rgba(220, 38, 38, 0.1)",
+  border: "1px solid rgba(220, 38, 38, 0.3)",
+  color: "#fca5a5",
+  fontSize: "14px",
+  marginBottom: "20px",
+  textAlign: "center",
+};
+
+const cardStyle = {
+  backgroundColor: "#171717",
+  border: "1px solid #262626",
+  borderRadius: "12px",
+  padding: "28px",
+};
+
+const inputGroupStyle = {
+  marginBottom: "20px",
+};
+
+const labelStyle = {
+  display: "block",
+  fontSize: "13px",
+  fontWeight: "500",
+  color: "#a1a1aa",
+  marginBottom: "8px",
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "14px 16px",
+  borderRadius: "8px",
+  border: "1px solid #3f3f46",
+  backgroundColor: "#0a0a0a",
+  color: "#fafafa",
+  fontSize: "15px",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const buttonStyle = {
+  width: "100%",
+  padding: "14px",
+  borderRadius: "8px",
+  border: "none",
+  backgroundColor: "#6d28d9",
+  color: "#fafafa",
+  fontSize: "15px",
+  fontWeight: "600",
+  cursor: "pointer",
+};
+
+const statusCardStyle = {
+  backgroundColor: "#171717",
+  border: "1px solid #262626",
+  borderRadius: "12px",
+  padding: "16px 20px",
+  marginBottom: "16px",
+};
+
+const statusRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+};
+
+const statusLabelStyle = {
+  color: "#71717a",
+  fontSize: "13px",
+  marginRight: "8px",
+};
+
+const statusCodeStyle = {
+  color: "#d8b4fe",
+  fontSize: "15px",
+  fontWeight: "600",
+  letterSpacing: "1px",
+};
+
+const statusRightStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "16px",
+};
+
+const pendingCountStyle = {
+  color: "#a1a1aa",
+  fontSize: "13px",
+};
+
+const logoutButtonStyle = {
+  padding: "8px 16px",
+  borderRadius: "6px",
+  border: "1px solid #3f3f46",
+  backgroundColor: "transparent",
+  color: "#a1a1aa",
+  fontSize: "13px",
+  cursor: "pointer",
+};
+
+const messagesCardStyle = {
+  backgroundColor: "#171717",
+  border: "1px solid #262626",
+  borderRadius: "12px",
+  padding: "20px",
+};
+
+const sectionTitleStyle = {
+  fontSize: "16px",
+  fontWeight: "600",
+  color: "#e5e5e5",
+  marginBottom: "20px",
+  paddingBottom: "12px",
+  borderBottom: "1px solid #262626",
+};
+
+const emptyStyle = {
+  textAlign: "center",
+  padding: "40px",
+  color: "#52525b",
+  fontSize: "14px",
+};
+
+const messageRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "16px",
+  borderRadius: "8px",
+  backgroundColor: "#0a0a0a",
+  border: "1px solid #262626",
+  marginBottom: "12px",
+};
+
+const messageContentStyle = {
+  flex: 1,
+};
+
+const senderStyle = {
+  fontSize: "12px",
+  fontWeight: "600",
+  color: "#a78bfa",
+  marginBottom: "4px",
+};
+
+const msgContentStyle = {
+  fontSize: "14px",
+  color: "#fafafa",
+};
+
+const actionsStyle = {
+  display: "flex",
+  gap: "8px",
+  marginLeft: "16px",
+};
+
+const approveButtonStyle = {
+  padding: "8px 16px",
+  borderRadius: "6px",
+  border: "none",
+  backgroundColor: "#6d28d9",
+  color: "#fafafa",
+  fontSize: "13px",
+  fontWeight: "500",
+  cursor: "pointer",
+};
+
+const deleteButtonStyle = {
+  padding: "8px 16px",
+  borderRadius: "6px",
+  border: "none",
+  backgroundColor: "#dc2626",
+  color: "#fafafa",
+  fontSize: "13px",
+  fontWeight: "500",
+  cursor: "pointer",
 };
 
 export default Admin;

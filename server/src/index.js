@@ -15,19 +15,27 @@ const app = express();
 const server = http.createServer(app);
 
 // ================================
-// 🔥 SOCKET.IO SETUP (MUST BE BEFORE ROUTES)
+// CORS CONFIG - Allow all origins for production
+// ================================
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,
+}));
+
+app.use(express.json());
+
+// ================================
+// SOCKET.IO SETUP
 // ================================
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://aws-cloud-connect-fhtb6hbey-samdev007-pixels-projects.vercel.app",
-      "http://localhost:5173",
-      "http://localhost:3000"
-    ],
+    origin: "*",
     methods: ["GET", "POST"],
     credentials: true,
   },
-  transports: ['websocket', 'polling'],
+  transports: ['polling', 'websocket'],
+  allowEIO3: true,
 });
 
 app.set("io", io);
@@ -36,43 +44,31 @@ app.set("io", io);
 socketHandler(io);
 
 // ================================
-// 🔥 CORS CONFIG FOR PRODUCTION
-// ================================
-app.use(
-  cors({
-    origin: [
-      "https://aws-cloud-connect-fhtb6hbey-samdev007-pixels-projects.vercel.app",
-      "http://localhost:5173",
-      "http://localhost:3000"
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    credentials: true,
-  })
-);
-
-app.use(express.json());
-
 // API Routes
+// ================================
 app.use("/api/rooms", roomRoutes);
 
-// ================================
-// 🔥 MESSAGE ROUTES
-// ================================
+// Message Routes
 const messageRoutes = require("./routes/messageRoutes");
 app.use("/api/messages", messageRoutes(io));
 
 // ================================
-// 🔥 HEALTH CHECK ROUTE
+// Health Check Route
 // ================================
 app.get("/", (req, res) => {
-  res.send("AWS Cloud Connect Backend Running 🚀");
+  res.json({ 
+    status: "ok", 
+    message: "AWS Cloud Connect Backend Running",
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ================================
-// 🔥 START SERVER
+// Start Server
 // ================================
 const PORT = process.env.PORT || 5001;
 
-server.listen(PORT, () => {
-  console.log(`🟣 Server running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });

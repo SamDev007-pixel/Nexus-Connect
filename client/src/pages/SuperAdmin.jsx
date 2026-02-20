@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 
@@ -15,122 +15,194 @@ const SuperAdmin = () => {
   const [liveUsers, setLiveUsers] = useState([]);
   const [socket, setSocket] = useState(null);
   const [activeTab, setActiveTab] = useState("live");
+  const [error, setError] = useState("");
 
+  // Initialize socket
   useEffect(() => {
-    const newSocket = io(SERVER_URL);
+    const newSocket = io(SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+    });
+    
+    newSocket.on("connect", () => {
+      console.log("SuperAdmin connected");
+    });
+    
     setSocket(newSocket);
+    
     return () => newSocket.disconnect();
   }, []);
 
+  // Restore session
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("superAdminSession"));
-    if (saved && saved.role === "superadmin") {
-      setRoomCode(saved.roomCode);
-      setSelectedRoomCode(saved.roomCode);
-      if (socket) {
-        socket.emit("join_room", { roomCode: saved.roomCode, role: "superadmin" });
+    try {
+      const saved = JSON.parse(localStorage.getItem("superAdminSession"));
+      if (saved && saved.role === "superadmin" && saved.roomCode) {
+        setRoomCode(saved.roomCode);
+        setSelectedRoomCode(saved.roomCode);
       }
+    } catch (e) {
+      console.error("Session parse error:", e);
     }
-  }, [socket]);
+  }, []);
 
+  // Join room when socket is ready
+  useEffect(() => {
+    if (!socket || !roomCode) return;
+    
+    socket.emit("join_room", { roomCode, role: "superadmin" });
+    
+    // Refresh pending users
+    fetchPendingUsers();
+    fetchAllUsers();
+  }, [socket, roomCode]);
+
+  // Listen for room deletion
   useEffect(() => {
     if (!socket) return;
+    
     const handleRoomDeleted = () => {
       alert("Room has been deleted.");
       localStorage.removeItem("superAdminSession");
+      setRoomCode("");
+      setSelectedRoomCode("");
       window.location.reload();
     };
+    
     socket.on("room_deleted", handleRoomDeleted);
     return () => socket.off("room_deleted", handleRoomDeleted);
   }, [socket]);
 
+  // Listen for live users updates
   useEffect(() => {
     if (!socket) return;
-    const handleLiveUsers = (users) => setLiveUsers(users);
+    
+    const handleLiveUsers = (users) => {
+      console.log("Live users update:", users);
+      setLiveUsers(users || []);
+    };
+    
     socket.on("superadmin_live_users", handleLiveUsers);
     return () => socket.off("superadmin_live_users", handleLiveUsers);
   }, [socket]);
 
-  const createRoom = async () => {
-    if (!roomName.trim()) return;
+  // Auto refresh every 3 seconds
+  useEffect(() => {
+    if (!socket || !selectedRoomCode) return;
+    
+    const interval = setInterval(() => {
+      socket.emit("join_room", { roomCode: selectedRoomCode, role: "superadmin" });
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [socket, selectedRoomCode]);
+
+  const fetchPendingUsers = useCallback(async () => {
+    if (!selectedRoomCode) return;
     try {
-      setLoading(true);
-      const res = await axios.post(`${SERVER_URL}/api/rooms/create`, { name: roomName });
+      const res = await axios.get(`${SERVER_URL}/api/rooms/${selectedRoomCode}/pending-users`);
+      setPendingUsers(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch pending users:", err);
+    }
+  }, [selectedRoomCode]);
+
+  const fetchAllUsers = useCallback(async () => {
+    if (!selectedRoomCode) return;
+    try {
+      const res = await axios.get(`${SERVER_URL}/api/rooms/${selectedRoomCode}/all-users`);
+      setAllUsers(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch all users:", err);
+    }
+  }, [selectedRoomCode]);
+
+  const createRoom = async () => {
+    if (!roomName.trim()) {
+      setError("Please enter a room name");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await axios.post(`${SERVER_URL}/api/rooms/create`, { name: roomName.trim() });
       const generatedCode = res.data.room.roomCode;
+      
       setRoomCode(generatedCode);
       setSelectedRoomCode(generatedCode);
       setRoomName("");
-      setPendingUsers([]);
-      setAllUsers([]);
-      setLiveUsers([]);
+      
       localStorage.setItem("superAdminSession", JSON.stringify({ roomCode: generatedCode, role: "superadmin" }));
+      
       if (socket) {
         socket.emit("join_room", { roomCode: generatedCode, role: "superadmin" });
       }
+      
+      // Refresh users
+      fetchPendingUsers();
+      fetchAllUsers();
+      
     } catch (err) {
-      console.error("Room creation failed");
+      console.error("Room creation failed:", err);
+      setError(err.response?.data?.message || "Failed to create room");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchPendingUsers = async () => {
-    if (!selectedRoomCode) return;
+  const approveUser = async (userId) => {
     try {
-      const res = await axios.get(`${SERVER_URL}/api/rooms/${selectedRoomCode}/pending-users`);
-      setPendingUsers(res.data);
+      // Use HTTP API for approval (more reliable)
+      await axios.patch(`${SERVER_URL}/api/rooms/approve-user/${userId}`);
+      
+      // Also emit via socket as backup
+      if (socket && selectedRoomCode) {
+        socket.emit("approve_user", { userId, roomCode: selectedRoomCode });
+      }
+      
+      // Remove from pending list immediately
+      setPendingUsers((prev) => prev.filter((user) => user._id !== userId));
+      
+      // Refresh all users
+      fetchAllUsers();
+      
+      console.log("User approved:", userId);
     } catch (err) {
-      console.error("Failed to fetch pending users");
-    }
-  };
-
-const approveUser = (userId) => {
-  if (!socket || !selectedRoomCode) return;
-
-  socket.emit("approve_user", {
-    userId,
-    roomCode: selectedRoomCode,
-  });
-
-  // Optional: remove from pending instantly for UI
-  setPendingUsers((prev) =>
-    prev.filter((user) => user._id !== userId)
-  );
-};
-
-  const fetchAllUsers = async () => {
-    if (!selectedRoomCode) return;
-    try {
-      const res = await axios.get(`${SERVER_URL}/api/rooms/${selectedRoomCode}/all-users`);
-      setAllUsers(res.data);
-    } catch (err) {
-      console.error("Failed to fetch all users");
+      console.error("Failed to approve user:", err);
+      setError("Failed to approve user");
     }
   };
 
   const kickUser = (userId) => {
     const confirmKick = window.confirm("Are you sure you want to remove this user from the room?");
     if (!confirmKick) return;
-    if (socket) {
+    
+    if (socket && selectedRoomCode) {
       socket.emit("kick_user", { userId, roomCode: selectedRoomCode });
     }
+    
+    // Refresh users after kick
+    setTimeout(() => {
+      fetchAllUsers();
+    }, 500);
   };
-
-  useEffect(() => {
-    if (!selectedRoomCode || !socket) return;
-    const interval = setInterval(() => {
-      socket.emit("join_room", { roomCode: selectedRoomCode, role: "superadmin" });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [selectedRoomCode, socket]);
 
   const handleDeleteRoom = () => {
     const confirmDelete = window.confirm("Are you sure you want to delete this room? This will remove everyone from the room.");
     if (!confirmDelete) return;
-    if (socket) {
+    
+    if (socket && roomCode) {
       socket.emit("delete_room", { roomCode });
     }
+    
     localStorage.removeItem("superAdminSession");
+    setRoomCode("");
+    setSelectedRoomCode("");
+    setPendingUsers([]);
+    setAllUsers([]);
+    setLiveUsers([]);
   };
 
   return (
@@ -141,6 +213,10 @@ const approveUser = (userId) => {
           <p style={subtitleStyle}>Manage your chat room</p>
         </div>
 
+        {error && (
+          <div style={errorStyle}>{error}</div>
+        )}
+
         {!roomCode && (
           <div style={cardStyle}>
             <h3 style={cardTitleStyle}>Create New Room</h3>
@@ -149,6 +225,7 @@ const approveUser = (userId) => {
               onChange={(e) => setRoomName(e.target.value)}
               placeholder="Enter Room Name"
               style={inputStyle}
+              disabled={loading}
             />
             <button onClick={createRoom} disabled={loading} style={primaryButtonStyle}>
               {loading ? "Creating..." : "Create Room"}
@@ -184,7 +261,10 @@ const approveUser = (userId) => {
                 All ({allUsers.length})
               </button>
               <button
-                onClick={() => setActiveTab("pending")}
+                onClick={() => {
+                  setActiveTab("pending");
+                  fetchPendingUsers();
+                }}
                 style={activeTab === "pending" ? activeTabStyle : tabStyle}
               >
                 Pending ({pendingUsers.length})
@@ -196,7 +276,6 @@ const approveUser = (userId) => {
                 <div>
                   <div style={sectionHeaderRow}>
                     <h3 style={sectionTitleStyle}>Live Users</h3>
-                    <span style={badgeStyle}>Real-time</span>
                   </div>
                   {liveUsers.length === 0 ? (
                     <div style={emptyStateStyle}>No users online</div>
@@ -205,7 +284,9 @@ const approveUser = (userId) => {
                       {liveUsers.map((user) => (
                         <div key={user._id || user.username} style={userRow}>
                           <div style={userInfoRow}>
-                            <div style={avatarStyle}>{user.username.charAt(0).toUpperCase()}</div>
+                            <div style={avatarStyle}>
+                              {user.username?.charAt(0)?.toUpperCase() || "?"}
+                            </div>
                             <div>
                               <div style={userNameStyle}>{user.username}</div>
                               <div style={userRoleStyle}>{user.role}</div>
@@ -237,26 +318,32 @@ const approveUser = (userId) => {
                       {allUsers.map((user) => (
                         <div key={user._id} style={userRow}>
                           <div style={userInfoRow}>
-                            <div style={{
-                              ...avatarStyle,
-                              backgroundColor: user.status === "approved" ? "#2d1a4d" : "#3d2a1a",
-                              color: user.status === "approved" ? "#c4a0ff" : "#fbbf24"
-                            }}>
-                              {user.username.charAt(0).toUpperCase()}
+                            <div
+                              style={{
+                                ...avatarStyle,
+                                backgroundColor: user.status === "approved" ? "#2d1a4d" : "#3d2a1a",
+                                color: user.status === "approved" ? "#c4a0ff" : "#fbbf24",
+                              }}
+                            >
+                              {user.username?.charAt(0)?.toUpperCase() || "?"}
                             </div>
                             <div>
                               <div style={userNameStyle}>{user.username}</div>
                               <div style={userStatusStyle}>
-                                <span style={{
-                                  ...statusDotStyle,
-                                  backgroundColor: user.isOnline ? "#22c55e" : "#6b7280"
-                                }}></span>
+                                <span
+                                  style={{
+                                    ...statusDotStyle,
+                                    backgroundColor: user.isOnline ? "#22c55e" : "#6b7280",
+                                  }}
+                                ></span>
                                 {user.isOnline ? "Online" : "Offline"} - {user.status}
                               </div>
                             </div>
                           </div>
                           {user.status === "approved" && (
-                            <button onClick={() => kickUser(user._id)} style={kickButtonStyle}>Kick</button>
+                            <button onClick={() => kickUser(user._id)} style={kickButtonStyle}>
+                              Kick
+                            </button>
                           )}
                         </div>
                       ))}
@@ -281,15 +368,17 @@ const approveUser = (userId) => {
                       {pendingUsers.map((user) => (
                         <div key={user._id} style={userRow}>
                           <div style={userInfoRow}>
-                            <div style={{...avatarStyle, backgroundColor: "#3d2a1a", color: "#fbbf24"}}>
-                              {user.username.charAt(0).toUpperCase()}
+                            <div style={{ ...avatarStyle, backgroundColor: "#3d2a1a", color: "#fbbf24" }}>
+                              {user.username?.charAt(0)?.toUpperCase() || "?"}
                             </div>
                             <div>
                               <div style={userNameStyle}>{user.username}</div>
                               <div style={userStatusStyle}>Waiting for approval</div>
                             </div>
                           </div>
-                          <button onClick={() => approveUser(user._id)} style={approveButtonStyle}>Approve</button>
+                          <button onClick={() => approveUser(user._id)} style={approveButtonStyle}>
+                            Approve
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -304,8 +393,7 @@ const approveUser = (userId) => {
   );
 };
 
-/* STYLES - Dark Purple & Black Theme */
-
+// Styles
 const pageStyle = {
   minHeight: "100vh",
   backgroundColor: "#0a0a0a",
@@ -334,6 +422,17 @@ const titleStyle = {
 const subtitleStyle = {
   fontSize: "14px",
   color: "#737373",
+};
+
+const errorStyle = {
+  padding: "12px 16px",
+  borderRadius: "8px",
+  backgroundColor: "rgba(220, 38, 38, 0.1)",
+  border: "1px solid rgba(220, 38, 38, 0.3)",
+  color: "#fca5a5",
+  fontSize: "14px",
+  marginBottom: "20px",
+  textAlign: "center",
 };
 
 const cardStyle = {
@@ -440,9 +539,16 @@ const tabStyle = {
 };
 
 const activeTabStyle = {
-  backgroundColor: "#3b0764",
+  flex: 1,
+  padding: "10px 12px",
+  borderRadius: "6px",
   border: "1px solid #581c87",
+  backgroundColor: "#3b0764",
   color: "#f5f5f5",
+  fontSize: "13px",
+  fontWeight: "500",
+  cursor: "pointer",
+  textAlign: "center",
 };
 
 const contentCardStyle = {
@@ -465,18 +571,6 @@ const sectionTitleStyle = {
   fontSize: "15px",
   fontWeight: "600",
   color: "#e5e5e5",
-};
-
-const badgeStyle = {
-  padding: "4px 8px",
-  borderRadius: "4px",
-  backgroundColor: "#1e1b4b",
-  border: "1px solid #312e81",
-  color: "#818cf8",
-  fontSize: "10px",
-  fontWeight: "500",
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
 };
 
 const refreshButtonStyle = {

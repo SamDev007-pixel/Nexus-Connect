@@ -12,6 +12,7 @@ const generateRoomCode = () => {
   }
   return code;
 };
+
 // Create Room (Super Admin)
 router.post("/create", async (req, res) => {
   try {
@@ -44,6 +45,7 @@ router.post("/create", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 // User Join Request (Pending Approval)
 router.post("/join", async (req, res) => {
   try {
@@ -55,7 +57,8 @@ router.post("/join", async (req, res) => {
       });
     }
 
-    const room = await Room.findOne({ roomCode });
+    const formattedCode = roomCode.trim().toUpperCase();
+    const room = await Room.findOne({ roomCode: formattedCode });
 
     if (!room) {
       return res.status(404).json({
@@ -79,6 +82,7 @@ router.post("/join", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 // Get Pending Users (Super Admin)
 router.get("/:roomCode/pending-users", async (req, res) => {
   try {
@@ -101,12 +105,13 @@ router.get("/:roomCode/pending-users", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-// Approve User (Super Admin)
+
+// Approve User (Super Admin) - HTTP API
 router.patch("/approve-user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).populate("room");
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -115,9 +120,20 @@ router.patch("/approve-user/:userId", async (req, res) => {
     user.status = "approved";
     await user.save();
 
-    // Emit socket event to that user
+    // Get io from express app
     const io = req.app.get("io");
-    io.emit("user_approved", userId);
+    
+    // Emit socket event to that user
+    if (user.socketId) {
+      io.to(user.socketId).emit("user_approved", userId);
+    }
+
+    // Also emit to the room
+    if (user.room) {
+      io.to(`room_${user.room.roomCode}`).emit("user_approved", userId);
+    }
+
+    console.log("✅ User approved via API:", user.username);
 
     res.json({
       message: "User approved successfully",

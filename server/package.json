@@ -1,13 +1,14 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "AWS Cloud Connect Backend Server",
+  "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "build": "echo 'No build step needed for Node.js server'"
   },
-  "keywords": [],
+  "keywords": ["chat", "realtime", "socket.io"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -21,5 +22,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.11"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }

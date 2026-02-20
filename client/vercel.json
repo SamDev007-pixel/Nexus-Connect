@@ -1,5 +1,16 @@
 {
   "rewrites": [
-    { "source": "/((?!api).*)", "destination": "/" }
+    { "source": "/(.*)", "destination": "/" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    }
   ]
 }

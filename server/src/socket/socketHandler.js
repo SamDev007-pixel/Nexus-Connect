@@ -17,11 +17,12 @@ const socketHandler = (io) => {
         const room = await Room.findOne({ roomCode: formattedCode });
 
         if (!room) {
-          socket.emit("room_deleted");
+          socket.emit("room_not_found");
           return;
         }
 
         socket.join(formattedCode);
+        socket.join(`room_${formattedCode}`);
 
         // Track user online status
         if (userId) {
@@ -31,7 +32,7 @@ const socketHandler = (io) => {
           });
         }
 
-        // USER
+        // USER - Load messages
         if (role === "user") {
           const messages = await Message.find({ room: room._id })
             .populate("sender", "username")
@@ -40,7 +41,7 @@ const socketHandler = (io) => {
           socket.emit("load_messages", messages);
         }
 
-        // ADMIN
+        // ADMIN - Load pending messages
         if (role === "admin") {
           const pending = await Message.find({
             room: room._id,
@@ -52,7 +53,7 @@ const socketHandler = (io) => {
           socket.emit("load_pending_messages", pending);
         }
 
-        // BROADCAST
+        // BROADCAST - Load approved messages
         if (role === "broadcast") {
           socket.join(`broadcast_${formattedCode}`);
 
@@ -66,7 +67,7 @@ const socketHandler = (io) => {
           socket.emit("load_broadcast_messages", approved);
         }
 
-        // SUPERADMIN
+        // SUPERADMIN - Live users
         if (role === "superadmin") {
           const liveUsers = await User.find({
             room: room._id,
@@ -74,7 +75,7 @@ const socketHandler = (io) => {
             isOnline: true,
           }).select("username role isOnline");
 
-          socket.emit("superadmin_live_users", liveUsers);
+          io.to(`room_${formattedCode}`).emit("superadmin_live_users", liveUsers);
         }
       } catch (err) {
         console.error("Join Room Error:", err.message);
@@ -103,11 +104,11 @@ const socketHandler = (io) => {
           .populate("sender", "username")
           .populate("room", "roomCode");
 
-        // Send to all users
-        io.to(formattedCode).emit("receive_message", populated);
+        // Send to all users in the room
+        io.to(`room_${formattedCode}`).emit("receive_message", populated);
 
-        // Send to admins only
-        io.to(formattedCode).emit("new_pending_message", populated);
+        // Send to admins only (pending messages)
+        io.to(`room_${formattedCode}`).emit("new_pending_message", populated);
 
       } catch (err) {
         console.error("Send Message Error:", err.message);
@@ -131,19 +132,17 @@ const socketHandler = (io) => {
 
         const roomCode = message.room.roomCode;
 
-        io.to(`broadcast_${roomCode}`).emit(
-          "broadcast_message",
-          message
-        );
+        io.to(`broadcast_${roomCode}`).emit("broadcast_message", message);
+
       } catch (err) {
         console.error("Approve Message Error:", err.message);
       }
     });
 
     // =========================================
-    // APPROVE USER (CORRECT VERSION)
+    // APPROVE USER (HTTP API + Socket fallback)
     // =========================================
-    socket.on("approve_user", async ({ userId }) => {
+    socket.on("approve_user", async ({ userId, roomCode }) => {
       try {
         const user = await User.findByIdAndUpdate(
           userId,
@@ -153,14 +152,46 @@ const socketHandler = (io) => {
 
         if (!user) return;
 
-        // Emit ONLY to that specific user
+        console.log("✅ User approved via socket:", user.username);
+
+        // Try to emit to specific user via socket ID
         if (user.socketId) {
-          io.to(user.socketId).emit("user_approved", user._id);
+          io.to(user.socketId).emit("user_approved", userId);
         }
 
-        console.log("✅ User approved:", user.username);
+        // Also emit to the room in case user reconnected
+        if (roomCode) {
+          const formattedCode = roomCode.trim().toUpperCase();
+          io.to(`room_${formattedCode}`).emit("user_approved", userId);
+        }
+
       } catch (err) {
         console.error("Approve User Error:", err.message);
+      }
+    });
+
+    // =========================================
+    // KICK USER
+    // =========================================
+    socket.on("kick_user", async ({ userId, roomCode }) => {
+      try {
+        const user = await User.findById(userId);
+        if (!user) return;
+
+        if (user.socketId) {
+          io.to(user.socketId).emit("kicked_from_room", {
+            message: "You were removed by Super Admin",
+          });
+        }
+
+        user.isOnline = false;
+        user.socketId = null;
+        await user.save();
+
+        console.log("👢 User kicked:", user.username);
+
+      } catch (err) {
+        console.error("Kick User Error:", err.message);
       }
     });
 
@@ -186,33 +217,12 @@ const socketHandler = (io) => {
         await Room.findByIdAndDelete(room._id);
 
         // Notify all users in the room
-        io.to(formattedCode).emit("room_deleted");
+        io.to(`room_${formattedCode}`).emit("room_deleted");
 
         console.log("🗑️ Room deleted:", formattedCode);
+
       } catch (err) {
         console.error("Delete Room Error:", err.message);
-      }
-    });
-
-    // =========================================
-    // KICK USER
-    // =========================================
-    socket.on("kick_user", async ({ userId }) => {
-      try {
-        const user = await User.findById(userId);
-        if (!user) return;
-
-        if (user.socketId) {
-          io.to(user.socketId).emit("kicked_from_room", {
-            message: "You were removed by Super Admin",
-          });
-        }
-
-        user.isOnline = false;
-        user.socketId = null;
-        await user.save();
-      } catch (err) {
-        console.error("Kick User Error:", err.message);
       }
     });
 
