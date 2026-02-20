@@ -44,20 +44,6 @@ const Admin = () => {
     });
   }, [socket, connected, roomCode]);
 
-  // Auto refresh every 2 seconds
-  useEffect(() => {
-    if (!socket || !connected || !roomCode) return;
-
-    const interval = setInterval(() => {
-      socket.emit("join_room", {
-        roomCode,
-        role: "admin",
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [socket, connected, roomCode]);
-
   // =====================================
   // 🔥 Listen For Pending + Delete Events
   // =====================================
