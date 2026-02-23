@@ -3,4 +3,4 @@
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 
 export const API_URL = import.meta.env.VITE_API_BASE_URL || `http://${hostname}:8080`;
-export const SOCKET_URL = import.meta.env.VITE_SOCKET_BASE_URL || `http://${hostname}:9092`;
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_BASE_URL || API_URL;

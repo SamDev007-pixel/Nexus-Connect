@@ -11,16 +11,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SocketIOConfig {
 
-    @Value("${socketio.host}")
-    private String host;
-
-    @Value("${socketio.port}")
+    @Value("${server.port:8080}")
     private Integer port;
 
     @Bean
     public SocketIOServer socketIOServer() {
         com.corundumstudio.socketio.Configuration config = new com.corundumstudio.socketio.Configuration();
-        config.setHostname(host);
+        config.setHostname("0.0.0.0");
         config.setPort(port);
 
         // Configure Jackson with JSR310 support
