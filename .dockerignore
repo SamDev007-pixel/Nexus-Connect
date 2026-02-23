@@ -1,0 +1,10 @@
+.git
+.gitignore
+client
+node_modules
+target
+*.log
+.vscode
+.agent
+.gemini
+render.yaml

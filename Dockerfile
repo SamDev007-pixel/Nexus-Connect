@@ -1,12 +1,17 @@
 # Build Stage
-FROM maven:3.8.5-openjdk-17-slim AS build
+FROM maven:3.9.6-eclipse-temurin-17 AS build
 WORKDIR /app
-COPY . .
-WORKDIR /app/backend-java
-RUN mvn clean package -DskipTests
+
+# Copy ONLY the pom first to cache dependencies (Faster Builds)
+COPY backend-java/pom.xml ./backend-java/
+RUN mvn -f backend-java/pom.xml dependency:go-offline
+
+# Now copy the source and build
+COPY backend-java/src ./backend-java/src
+RUN mvn -f backend-java/pom.xml clean package -DskipTests
 
 # Run Stage
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/backend-java/target/nexus-connect-0.0.1-SNAPSHOT.jar app.jar
 
