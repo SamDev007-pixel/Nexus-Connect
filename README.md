@@ -1,109 +1,88 @@
-# AWS Cloud Connect - Production Deployment Guide
+# 📡 NEXUS - Real-Time Communication & Moderation System
+### 🎓 Internship Capstone Project
 
-A real-time chat and live broadcast system with room management, user approval, and message moderation.
-
-## Quick Deploy
-
-### Step 1: Deploy Backend to Render
-
-1. Go to [Render.com](https://render.com) and create a new **Web Service**
-2. Connect your GitHub repository
-3. Configure:
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-4. Add these Environment Variables:
-   - `MONGO_URI` = Your MongoDB connection string (from MongoDB Atlas)
-   - `PORT` = 5001
-5. Click **Deploy**
-
-Once deployed, you'll get a URL like: `https://your-app.onrender.com`
-
-### Step 2: Deploy Frontend to Vercel
-
-1. Go to [Vercel.com](https://vercel.com) and import your GitHub repo
-2. Configure:
-   - **Framework Preset**: Vite
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-3. Add Environment Variable:
-   - `VITE_SERVER_URL` = Your Render backend URL (e.g., `https://your-app.onrender.com`)
-4. Click **Deploy**
-
-Your app will be live at: `https://your-project.vercel.app`
+NEXUS is a full-stack real-time communication platform developed as part of an **internship project**. It demonstrates the integration of modern web technologies to solve real-world challenges in synchronizing data across multiple user roles.
 
 ---
 
-## Configuration Required
+## 📝 Project Overview
+The objective of this project was to build a secure, role-based messaging system where communication is strictly moderated. This project explores the implementation of **WebSockets** for real-time updates and **NoSQL databases** for persistent message storage.
 
-### Update Client Server URL
-
-After deploying to Render, update the fallback URL in these files:
-
-**Files to update:**
-- `client/src/pages/ChatRoom.jsx`
-- `client/src/pages/SuperAdmin.jsx`
-- `client/src/pages/Admin.jsx`
-- `client/src/pages/Broadcast.jsx`
-
-Find this line in each file:
-```
-javascript
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "https://aws-cloud-connect-server.onrender.com";
-```
-
-Replace `https://aws-cloud-connect-server.onrender.com` with your actual Render URL.
+### 🚀 Key Features Implemented:
+- **Role-Based Access Control (RBAC):** Distinct interfaces for Users, Admins, and SuperAdmins.
+- **Moderation Pipeline:** A system where user messages must be authorized by an admin before appearing on the public broadcast.
+- **Real-Time Synchronization:** Instant data delivery using Socket.io, ensuring zero-latency updates across all terminals.
+- **Identity Persistence:** A custom logic to ensure sender information is preserved in the history even after a user disconnects.
+- **Modern UI/UX:** A glassmorphic design system focusing on premium aesthetics and responsive layouts.
 
 ---
 
-## Features
+## 🏗️ System Architecture
+This project follows a decoupled **Client-Server Architecture**:
 
-- 🔴 **Live Broadcast** - Real-time message broadcasting
-- 👥 **User Management** - Super Admin can create rooms and manage users
-- ✅ **Approval System** - Users need approval before participating
-- 🛡️ **Moderation** - Admin can approve or delete messages
-- 💬 **Chat Room** - Real-time chat with room codes
+### **Frontend (The Client)**
+- Built with **React** and **Vite**.
+- Uses **Framer Motion** for interactive animations.
+- Implements **Axios** for RESTful API communication.
+- Uses **Socket.io-client** for persistent real-time connections.
 
----
+### **Backend (The Server)**
+- Built with **Java** using the **Spring Boot** framework.
+- **Spring Data MongoDB** handles communication with the NoSQL database.
+- **Netty-SocketIO** provides a high-performance WebSocket server optimized for Java.
 
-## Usage Flow
-
-1. **Super Admin** goes to `/super-admin`, creates a room
-2. Share the room code with users
-3. **Users** go to `/chat`, enter username and room code, wait for approval
-4. **Super Admin** approves users from the Super Admin panel
-5. **Users** can now send messages (they go to pending)
-6. **Admin** goes to `/admin`, enters room code, moderates messages
-7. **Broadcast** viewers at `/broadcast` see only approved messages
+### **Database**
+- **MongoDB** is used to store Room configurations, User profiles, and Message history.
 
 ---
 
-## Environment Variables
-
-### Server (.env)
-| Variable | Description | Required |
-|----------|-------------|----------|
-| MONGO_URI | MongoDB connection string | Yes |
-| PORT | Server port (default: 5001) | No |
-
-### Client (Vercel)
-| Variable | Description | Required |
-|----------|-------------|----------|
-| VITE_SERVER_URL | Your Render backend URL | Yes |
+## 🛠️ Tech Stack Used
+- **Frontend:** React, JavaScript (ES6+), CSS3 (Glassmorphism), Lucide Icons.
+- **Backend:** Java 17, Spring Boot, Maven.
+- **Database:** MongoDB.
+- **Communication:** Socket.io (WebSockets).
 
 ---
 
-## Troubleshooting
+## 📖 Educational Learnings
+Developing this project provided deep insights into:
+1. **Asynchronous Programming:** Managing real-time events and state synchronization in a multi-user environment.
+2. **Database Modeling:** Designing flexible NoSQL schemas for chat and moderation logs.
+3. **Security Logic:** Implementing role-based gatekeeping (SuperAdmin → Admin → User).
+4. **Clean Code & Refactoring:** optimizing production builds and handling linter-driven code quality.
 
-### If Socket.io not connecting:
-1. Check that your Render backend is running
-2. Verify VITE_SERVER_URL is correct in Vercel
-3. Check browser console for CORS errors
+---
 
-### If MongoDB connection fails:
-1. Verify MONGO_URI is correct
-2. Check MongoDB Atlas network settings (allow all IPs)
-3. Check Render logs for connection errors
+## ⚙️ How to Run Locally
 
-### If pages not loading:
-1. Verify vercel.json rewrite rules
-2. Check that all routes work locally first
+### 1. Prerequisites
+- **JDK 17** or higher
+- **Node.js & npm**
+- **MongoDB** (Local instance or Atlas connection string)
+- **Maven** (for Java building)
+
+### 2. Backend Setup
+1. Navigate to `backend-java/`.
+2. Configure your MongoDB URI in `src/main/resources/application.properties`.
+3. Build and run:
+   ```bash
+   mvn clean package
+   mvn spring-boot:run
+   ```
+
+### 3. Frontend Setup
+1. Navigate to `client/`.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Update the API and Socket URLs in `src/config.js` to point to your local backend.
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## ⚠️ Disclaimer
+This project was developed for **educational and internship purposes** only. It is not intended for commercial use. All branding and assets are part of the internship learning track.

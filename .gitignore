@@ -1,0 +1,22 @@
+# General
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.txt
+build_log.txt
+lint_log.txt
+
+# Backend (Java/Maven)
+backend-java/target/
+backend-java/.classpath
+backend-java/.project
+backend-java/.settings/
+backend-java/*.log
+
+# Frontend (Node/React)
+client/node_modules/
+client/dist/
+client/.env
+client/.env.local
+client/*.log

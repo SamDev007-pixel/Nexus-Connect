@@ -1,10 +1,36 @@
 :root {
-  --bg-black: #0f0f14;
-  --bg-dark-purple: #1a0826;
-  --purple-main: #7b2cbf;
-  --purple-light: #9d4edd;
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --text-light: #ffffff;
-  --text-muted: #cccccc;
+  /* Colors */
+  --primary-hsl: 263, 70%, 50%;
+  --primary: hsl(var(--primary-hsl));
+  --primary-light: hsl(263, 70%, 65%);
+  --primary-dark: hsl(263, 70%, 35%);
+  
+  --secondary-hsl: 280, 65%, 45%;
+  --secondary: hsl(var(--secondary-hsl));
+  
+  --accent-hsl: 190, 80%, 50%;
+  --accent: hsl(var(--accent-hsl));
+
+  --bg-deep: #050508;
+  --bg-surface: #0c0c12;
+  --bg-subtle: #161620;
+  
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
+
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.3);
+  --shadow-primary: 0 8px 32px hsla(var(--primary-hsl), 0.2);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.3s ease;
+  --transition-slow: 0.5s ease;
 }
