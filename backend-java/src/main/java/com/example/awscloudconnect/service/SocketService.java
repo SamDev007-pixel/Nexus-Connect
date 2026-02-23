@@ -138,6 +138,12 @@ public class SocketService {
                     user.setOnline(true);
                     user.setSocketId(client.getSessionId().toString());
                     userRepository.save(user);
+
+                    // If user is already approved (e.g. from a previous session or while offline),
+                    // tell them to move to the approved state in the UI.
+                    if ("approved".equals(user.getStatus())) {
+                        client.sendEvent("user_approved", user.getId());
+                    }
                 });
             }
 
