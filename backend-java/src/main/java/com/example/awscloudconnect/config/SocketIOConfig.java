@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SocketIOConfig {
 
-    @Value("${server.port:8080}")
+    @Value("${socketio.port:9092}")
     private Integer port;
 
     @Bean

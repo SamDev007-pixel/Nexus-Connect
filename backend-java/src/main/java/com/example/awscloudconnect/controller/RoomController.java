@@ -40,9 +40,11 @@ public class RoomController {
         }
 
         // Security Validation: Only authorized root users can command new room creation
-        System.out.println("DEBUG: Room creation attempt with rootPassword: " + password);
-        if (!"NEXUS@ROOT".equals(password)) {
-            System.out.println("DEBUG: Authorization Failed for password: " + password);
+        String trimmedPassword = (password != null) ? password.trim() : "";
+        System.out.println("DEBUG: Room creation attempt with rootPassword: " + trimmedPassword);
+
+        if (!"NEXUS@ROOT".equals(trimmedPassword)) {
+            System.out.println("DEBUG: Authorization Failed for password: " + trimmedPassword);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "Authorization Protocol Failed. Invalid root credentials."));
         }
